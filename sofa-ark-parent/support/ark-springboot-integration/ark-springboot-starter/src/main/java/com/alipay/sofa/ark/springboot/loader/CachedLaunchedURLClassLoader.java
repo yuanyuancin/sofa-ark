@@ -58,6 +58,8 @@ public class CachedLaunchedURLClassLoader extends LaunchedURLClassLoader {
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         // Class.forName(name) 会调用native方法，之后才会调用到这边，会不会经过一次native方法，堆栈断了
         // 尝试基座classloader加载biz模块的业务类
+        // 中间件类加载都要经过这个遍历，降低性能
+        // 可以尝试先 loadClassWithCache，load不到再使用正确的 tccl 加载呢
         if (this != Thread.currentThread().getContextClassLoader()) {
             StackTraceElement[] stacks = (new Throwable()).getStackTrace();
             for (StackTraceElement stack : stacks) {
