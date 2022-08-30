@@ -16,15 +16,21 @@
  */
 package com.alipay.sofa.ark.springboot.loader;
 
+import com.alipay.sofa.ark.api.ArkClient;
 import org.springframework.boot.loader.LaunchedURLClassLoader;
 import org.springframework.boot.loader.archive.Archive;
+import org.springframework.util.ReflectionUtils;
+import sun.reflect.CallerSensitive;
+import sun.reflect.Reflection;
 
 import java.io.IOException;
 import java.net.URL;
 import java.util.Enumeration;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * A cached LaunchedURLClassLoader to accelerate load classes and resources
@@ -50,6 +56,21 @@ public class CachedLaunchedURLClassLoader extends LaunchedURLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        // Class.forName(name) 会调用native方法，之后才会调用到这边，会不会经过一次native方法，堆栈断了
+        // 尝试基座classloader加载biz模块的业务类
+        if (this != Thread.currentThread().getContextClassLoader()) {
+            StackTraceElement[] stacks = (new Throwable()).getStackTrace();
+            for (StackTraceElement stack : stacks) {
+                System.out.println(stack.getClassName() + "-" + stack.getMethodName());
+                // 本身就是 export / postfind 委托给基座
+                if (stack.getClassName().contains("BizClassLoader")) {
+                    break;
+                }
+                if (stack.getClassName().equals("Class") && stack.getMethodName().equals("forName")) {
+                    return Class.forName(name, resolve, Thread.currentThread().getContextClassLoader());
+                }
+            }
+        }
         return loadClassWithCache(name, resolve);
     }
 
